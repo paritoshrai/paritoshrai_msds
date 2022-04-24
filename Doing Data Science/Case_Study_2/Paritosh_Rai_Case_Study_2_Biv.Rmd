@@ -1,0 +1,921 @@
+---
+title: "Case_Study_2"
+author: "Paritosh Rai"
+date: "8/14/2019"
+output: html_document
+---
+
+#MSDS 6306: Doing Data Science
+
+##Case Study 02
+
+###GitHub: https://github.com/paritoshrai/CaseStudy2DDS
+
+###Youtube: https://youtu.be/WEzkAYl0yoM
+
+### **Introduction:**Employee Attrition can cost a company a lot and can create business interruption too. It is critical organization should look at critical contributors and how we can avoid the attrition. We are given a database with 870 rows and 36 attributes. It will be great to predict which employees are more venerable to attrition and what step a company can take to minimize the attrition. We will look at monthly income too and predict the monthly salary based on these attributes.
+
+### **Description:** DDSAnalytics is an analytics company that specializes in talent management solutions for Fortune 100 companies. Talent management is defined as the iterative process of developing and retaining employees. It may include workforce planning, employee training programs, identifying high-potential employees and reducing/preventing voluntary employee turnover (attrition). To gain a competitive edge over its competition, DDSAnalytics is planning to leverage data science for talent management. The executive leadership has identified predicting employee turnover as its first application of data science for talent management. Before the business green lights the project, they have tasked your data science team to conduct an analysis of existing employee data. 
+
+### We are given a dataset (CaseStudy2-data.csv) to do a data analysis to identify factors that lead to attrition.  We will identify the top three factors that contribute to turnover. We will look at need to create derived attributes/variables/features. 
+
+### The business is also interested in learning about any job role specific trends that may exist in the data set . We will looka at  any other interesting trends and observations from your analysis. The analysis should be backed up by robust experimentation and appropriate visualization. Experiments and analysis must be conducted in R. You will also be asked to build a model to predict attrition.    
+
+
+
+
+```{r setup, message = FALSE}
+library(corrgram)
+library(tidyverse)
+library(gplots)
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
+library(lattice)
+library(ggfortify)
+library(class)
+library(caret)
+library(rlang)
+library(dplyr)
+library(e1071)
+library(plotrix)
+library(reshape2)
+library(corrplot)
+library(naivebayes)
+library(tidyr)
+library(lattice)
+library(ggfortify)
+library(readxl)
+```
+
+
+```{r,(echo=TRUE)}
+
+# Read CSV file
+
+emp_data<-read.csv("https://raw.githubusercontent.com/BivinSadler/MSDS-6306-Doing-Data-Science/master/UNIT%2014/CaseStudy2-data.csv",header = TRUE,sep = ",")
+
+#View(emp_data)
+str(emp_data)
+#head(emp_data)
+#View(emp_data)
+summary(emp_data)
+
+#Attrition Pie Chart
+
+#Employee Data Attrition Pie Chart
+emp_data_att<-emp_data[emp_data$Attrition=="Yes",]
+#View(emp_data_att)
+
+att_df<-data.frame(emp_data$Attrition)
+summary(att_df)
+#create pie chart
+qty <- c(140,730)
+att <- c("YES", "NO")
+pct <- round(qty/sum(qty)*100)
+att <- paste(att, pct) # add percents to labels 
+att <- paste(att,"%",sep=" ") # ad % to labels 
+pie3D(qty,labels = att,explode=0.3,
+    main="Pie Chart of Attrition") 
+
+
+```
+
+
+```{r}
+co_age<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Age))
+co_bus_t<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$BusinessTravel))
+co_dist_h<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$DistanceFromHome))
+co_dep<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Department))
+co_edu<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education))
+co_env<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$EnvironmentSatisfaction))
+co_gen<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Gender))
+co_job_l<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel))
+co_job_r<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobRole))
+co_Job_s<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobSatisfaction))
+co_mat<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$MaritalStatus))
+co_mon_i<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$MonthlyIncome))
+co_cop_w<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$NumCompaniesWorked))
+co_o_18<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Over18))
+co_ot<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$OverTime))
+co_per_h<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$PercentSalaryHike))
+co_per_r<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$PerformanceRating))
+co_rel_f<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$RelationshipSatisfaction))
+co_st_op<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$StockOptionLevel))
+co_tot_y<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$TotalWorkingYears))
+co_Trg_t<-cor<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$TrainingTimesLastYear))
+co_wok_l<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$WorkLifeBalance))
+co_year_c<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsAtCompany))
+co_year_cr<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsInCurrentRole))
+co_year_lp<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsSinceLastPromotion))
+co_year_crm<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager))
+
+
+#Overtim Coorelation
+co_ot_yes<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$OverTime=="Yes"))
+co_ot_no<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$OverTime=="No"))
+
+
+#Marrage Coorelation
+co_mat_sig<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$MaritalStatus=="Single"))
+co_mat_dov<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$MaritalStatus=="Divorced"))
+co_mat_mar<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$MaritalStatus=="Married"))
+
+#Job Level
+co_job_l_1<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel==1))
+co_job_l_2<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel==2))
+co_job_l_3<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel==3))
+co_job_l_4<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel==4))
+co_job_l_5<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobLevel==5))
+co_bus_t_r<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$BusinessTravel=="Travel_Rarely"))
+co_bus_t_f<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$BusinessTravel=="Travel_Frequently"))
+co_bus_t_n<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$BusinessTravel=="Non-Travel"))
+
+#Stock Option
+co_st_op_0<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$StockOptionLevel==0))
+co_st_op_1<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$StockOptionLevel==1))
+co_st_op_2<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$StockOptionLevel==2))
+co_st_op_3<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$StockOptionLevel==3))
+
+#Job Satisfaction
+co_Job_s_1<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobSatisfaction==1))
+co_Job_s_2<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobSatisfaction==2))
+co_Job_s_3<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobSatisfaction==3))
+co_Job_s_4<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$JobSatisfaction==4))
+
+#Education
+co_Edu_1<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education==1))
+co_Edu_2<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education==2))
+co_Edu_3<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education==3))
+co_Edu_4<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education==4))
+co_Edu_5<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$Education==5))
+
+
+
+#YearsWithCurrManager
+co_year_crm_0<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager==0))
+co_year_crm_5<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager==c(0,1,2,3,4,5)))
+co_year_crm_10<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager==c(0,1,2,3,4,5,6,7,8,9,10)))
+co_year_crm_15<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager==c(11,12,13,14,15)))
+co_year_crm_20<-cor(as.numeric(emp_data$Attrition), as.numeric(emp_data$YearsWithCurrManager==c(16,17,18,19,20)))
+#co_year_crm_0
+#co_year_crm_5
+#co_year_crm_10
+#co_year_crm_15
+#co_year_crm_20
+
+a<-emp_data$Age<30
+#View(a)
+emp_data_age_30<-emp_data[a,]
+#View(emp_data_30)
+co_year_age_30<-cor(as.numeric(emp_data_age_30$Attrition), as.numeric(emp_data_age_30$Age))
+#co_year_age_30
+b<-emp_data$Age<=40
+#View(b)
+emp_data_age_40<-emp_data[b,]
+#View(emp_data_40)
+co_year_age_40<-cor(as.numeric(emp_data_age_40$Attrition), as.numeric(emp_data_age_40$Age))
+#co_year_age_40
+c<-emp_data$Age<=50
+#View(c)
+emp_data_age_50<-emp_data[c,]
+#View(emp_data_50)
+co_year_age_50<-cor(as.numeric(emp_data_age_50$Attrition), as.numeric(emp_data_age_50$Age))
+#co_year_age_50
+d<-emp_data$Age<=60
+#View(d)
+emp_data_age_60<-emp_data[d,]
+#View(emp_data_60)
+co_year_age_60<-cor(as.numeric(emp_data_age_60$Attrition), as.numeric(emp_data_age_60$Age))
+#co_year_age_60
+
+
+# Years with Current Manager
+a<-emp_data$YearsWithCurrManager<=5
+#View(a)
+emp_data_crm_5<-emp_data[a,]
+#View(emp_data_crm_5)
+co_crm_5<--cor(as.numeric(emp_data_crm_5$Attrition), as.numeric(emp_data_crm_5$YearsWithCurrManager))
+#co_crm_5
+b<-emp_data$YearsWithCurrManager<=10
+#View(b)
+emp_data_crm_10<-emp_data[b,]
+#View(emp_data_crm_10)
+co_crm_10<--cor(as.numeric(emp_data_crm_10$Attrition), as.numeric(emp_data_crm_10$YearsWithCurrManager))
+#co_crm_10
+c<-emp_data$YearsWithCurrManager<=15
+#View(c)
+emp_data_crm_15<-emp_data[b,]
+#View(emp_data_crm_15)
+co_crm_15<-cor(as.numeric(emp_data_crm_15$Attrition), as.numeric(emp_data_crm_15$YearsWithCurrManager))
+#co_crm_15
+d<-emp_data$YearsWithCurrManager<=20
+#View(d)
+emp_data_crm_20<-emp_data[d,]
+#View(emp_data_crm_20)
+co_crm_20<--cor(as.numeric(emp_data_crm_20$Attrition), as.numeric(emp_data_crm_20$YearsWithCurrManager))
+#co_crm_20
+
+
+#Total Working Year
+a<-emp_data$TotalWorkingYears<=10
+#View(a)
+emp_data_tot_y_10<-emp_data[a,]
+#View(emp_data_tot_y_10)
+co_tot_y_10<-cor(as.numeric(emp_data_tot_y_10$Attrition), as.numeric(emp_data_tot_y_10$TotalWorkingYears))
+#co_tot_y_10
+b<-emp_data$TotalWorkingYears<=20
+#View(b)
+emp_data_tot_y_20<-emp_data[b,]
+#View(emp_data_tot_y_20)
+co_tot_y_20<-cor(as.numeric(emp_data_tot_y_20$Attrition), as.numeric(emp_data_tot_y_20$TotalWorkingYears))
+#co_tot_y_20
+c<-emp_data$TotalWorkingYears<=30
+#View(c)
+emp_data_tot_y_30<-emp_data[c,]
+#View(emp_data_tot_y_30)
+co_tot_y_30<-cor(as.numeric(emp_data_tot_y_30$Attrition), as.numeric(emp_data_tot_y_30$TotalWorkingYears))
+#co_tot_y_30
+d<-emp_data$TotalWorkingYears<=40
+#View(d)
+emp_data_tot_y_40<-emp_data[d,]
+#View(emp_data_tot_y_40)
+co_tot_y_40<-cor(as.numeric(emp_data_tot_y_40$Attrition), as.numeric(emp_data_tot_y_40$TotalWorkingYears))
+#co_tot_y_40
+
+#Year in Current Role
+a<-emp_data$YearsInCurrentRole<=5
+#View(a)
+emp_data_year_cr_5<-emp_data[a,]
+#View(emp_data_year_cr_5)
+co_year_cr_5<-cor(as.numeric(emp_data_year_cr_5$Attrition), as.numeric(emp_data_year_cr_5$YearsInCurrentRole))
+#co_year_cr_5
+b<-emp_data$YearsInCurrentRole<=10
+#View(b)
+emp_data_year_cr_10<-emp_data[b,]
+#View(emp_data_year_cr_10)
+co_year_cr_10<-cor(as.numeric(emp_data_year_cr_10$Attrition), as.numeric(emp_data_year_cr_10$YearsInCurrentRole))
+#co_year_cr_10
+c<-emp_data$YearsInCurrentRole<=15
+#View(c)
+emp_data_year_cr_15<-emp_data[c,]
+#View(emp_data_year_cr_15)
+co_year_cr_15<-cor(as.numeric(emp_data_year_cr_15$Attrition), as.numeric(emp_data_year_cr_15$YearsInCurrentRole))
+#co_year_cr_15
+d<-emp_data$YearsInCurrentRole<=20
+#View(d)
+emp_data_year_cr_20<-emp_data[d,]
+#View(emp_data_year_cr_20)
+co_year_cr_20<-cor(as.numeric(emp_data_year_cr_20$Attrition), as.numeric(emp_data_year_cr_20$YearsInCurrentRole))
+#co_year_cr_20
+
+
+
+DF_empdata_cor_main<-data.frame(c("Age","BusinessTravel","Department","DistanceFromHome","Education","EnvironmentSatisfaction","Gender","JobLevel","JobRole","JobSatisfaction","MaritalStatus","MonthlyIncome","NumCompaniesWorked","Over18","OverTime","PercentSalaryHike","PerformanceRating","RelationshipSatisfaction", "StockOptionLevel","TotalWorkingYears", "TrainingTimesLastYear","WorkLifeBalance","YearsAtCompany","YearsInCurrentRole","YearsSinceLastPromotion","YearsWithCurrManager"), 
+                           c(co_age,co_bus_t, co_dep, co_dist_h, co_edu, co_env, co_gen, co_job_l, co_job_r, co_Job_s,co_mat,co_mon_i, co_cop_w, co_o_18, co_ot, co_per_h, co_per_r, co_rel_f, co_st_op, co_tot_y, co_Trg_t, co_wok_l, co_year_c,co_year_cr,co_year_lp,co_year_crm))
+
+colnames(DF_empdata_cor_main)<-c("Attribute","Coorelation")
+DF_empdata_cor_main$co_per<-(DF_empdata_cor_main$Coorelation*100)
+DF_empdata_cor_main$abs_co_per<-abs(DF_empdata_cor_main$co_per)
+DF_empdata_cor_main<-DF_empdata_cor_main[order(DF_empdata_cor_main$abs_co_per),]
+DF_empdata_cor_main
+
+#View(DF_empdata_cor_main)
+#Build a Bar chart to compare the corelaation in emp data
+p_main<-ggplot(DF_empdata_cor_main ,aes(x=reorder(Attribute,-abs_co_per),y=abs_co_per, fill=Attribute))+ 
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Attribute Correlation") + labs(x = "Attibutes", y = "Correlation %")
+
+p_main
+
+
+
+DF_empdata_cor<-data.frame(c("Age","Age<30","Age<40", "Age<50","Age<60","BusinessTravel","BusinessTravelRarely", "BusinessTravelFrequently", "BusinessTravelNonTravel","Department","DistanceFromHome","Education","EnvironmentSatisfaction","Gender","JobLevel","JobLevel_1","JobLevel_2","JobLevel_3","JobLevel_4","JobLevel_5","JobRole","JobSatisfaction","JobSatisfaction1","JobSatisfaction2","JobSatisfaction3","JobSatisfaction4","MaritalStatus","MaritalStatusSingle","MaritalStatusDivorced","MaritalStatusMarried","MonthlyIncome","NumCompaniesWorked","Over18","OverTime","PercentSalaryHike","PerformanceRating","RelationshipSatisfaction", "StockOptionLevel","StockOptionLevel0","StockOptionLevel1","StockOptionLevel2","StockOptionLevel3","TotalWorkingYears", "TotalWorkingYears<10","TotalWorkingYears<20","TotalWorkingYears<30","TotalWorkingYears<40","TrainingTimesLastYear","WorkLifeBalance","YearsAtCompany","YearsInCurrentRole","YearsInCurrentRole<5","YearsInCurrentRole<10","YearsInCurrentRole<15","YearsInCurrentRole<20","YearsSinceLastPromotion","YearsWithCurrManager","YearsWithCurrManager<5","YearsWithCurrManager<10", "YearsWithCurrManager<15","YearsWithCurrManager<20"), 
+                         c(co_age,co_year_age_30,co_year_age_40,co_year_age_50,co_year_age_60, co_bus_t,co_bus_t_r, co_bus_t_f, co_bus_t_n, co_dep, co_dist_h, co_edu, co_env, co_gen, co_job_l,co_job_l_1,co_job_l_2,co_job_l_3,co_job_l_4,co_job_l_5, co_job_r, co_Job_s,co_Job_s_1,co_Job_s_2,co_Job_s_3,co_Job_s_4, co_mat, co_mat_sig, co_mat_dov, co_mat_mar, co_mon_i, co_cop_w, co_o_18, co_ot, co_per_h, co_per_r, co_rel_f, co_st_op, co_st_op_0,co_st_op_1,co_st_op_2,co_st_op_3,co_tot_y,co_tot_y_10,co_tot_y_20, co_tot_y_30,co_tot_y_40, co_Trg_t, co_wok_l, co_year_c,co_year_cr,co_year_cr_5,co_year_cr_10,co_year_cr_15,co_year_cr_20, co_year_lp,co_year_crm,co_crm_5,co_crm_10,co_crm_15,co_crm_20))
+
+colnames(DF_empdata_cor)<-c("Attribute","Coorelation")
+DF_empdata_cor$co_per<-(DF_empdata_cor$Coorelation*100)
+DF_empdata_cor$abs_co_per<-abs(DF_empdata_cor$co_per)
+DF_empdata_cor<-DF_empdata_cor[order(DF_empdata_cor$abs_co_per),]
+DF_empdata_cor
+#View(DF_empdata_cor)
+
+
+
+#Build a Bar chart to compare the corelaation in emp data
+p_detail<-ggplot(DF_empdata_cor ,aes(x=reorder(Attribute,-abs_co_per),y=abs_co_per, fill=Attribute))+ 
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Detail Attribute Correlation") + labs(x = "Attibutes", y = "Correlation %")
+p_detail
+
+#Plot for Job Level correlation
+DF_empdata_cor_lev<-data.frame(c("JobLevel","JobLevel_1","JobLevel_2","JobLevel_3","JobLevel_4","JobLevel_5"), 
+                               c(co_job_l,co_job_l_1,co_job_l_2,co_job_l_3,co_job_l_4,co_job_l_5))
+
+colnames(DF_empdata_cor_lev)<-c("Attribute","Coorelation")
+
+DF_empdata_cor_lev
+DF_empdata_cor_lev$co_per<-(DF_empdata_cor_lev$Coorelation*100)
+DF_empdata_cor_lev$abs_co_per<-abs(DF_empdata_cor_lev$co_per)
+DF_empdata_cor_lev<-DF_empdata_cor_lev[order(DF_empdata_cor_lev$abs_co_per),]
+
+DF_empdata_cor_lev
+#View(DF_empdata_cor_age)
+
+#Build a Bar chart to compare the corelaation in emp data
+p_lev<-ggplot(DF_empdata_cor_lev ,aes(Attribute,abs_co_per, fill=Attribute))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Job Level and Attrition Correlation") + labs(x = "Job Level",y="Correlation %")
+ 
+p_lev
+
+
+#Plot for Age correlation
+DF_empdata_cor_age<-data.frame(c("Age","Age>30","Age>40", "Age>50","Age>60"),
+                               c(co_age,co_year_age_30,co_year_age_40,co_year_age_50,co_year_age_60))
+
+colnames(DF_empdata_cor_age)<-c("Attribute","Coorelation")
+DF_empdata_cor_age$co_per<-(DF_empdata_cor_age$Coorelation*100)
+DF_empdata_cor_age$abs_co_per<-abs(DF_empdata_cor_age$co_per)
+DF_empdata_cor_age<-DF_empdata_cor_age[order(DF_empdata_cor_age$abs_co_per),]
+DF_empdata_cor_age
+#View(DF_empdata_cor_age)
+
+#Build a Bar chart to compare the corelaation in emp data
+p_age<-ggplot(DF_empdata_cor_age ,aes(Attribute,abs_co_per, fill=Attribute,label = abs_co_per))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Age and Attrition Correlation") + labs(x = "Age",y="Correlation %")
+
+p_age
+
+#Plot for Marrage correlation
+DF_empdata_cor_marrage<-data.frame(c("Single","Divorced","Married"),
+                               c(co_mat_sig,co_mat_dov,co_mat_mar))
+
+colnames(DF_empdata_cor_marrage)<-c("Attribute","Coorelation")
+DF_empdata_cor_marrage$co_per<-(DF_empdata_cor_marrage$Coorelation*100)
+DF_empdata_cor_marrage$abs_co_per<-abs(DF_empdata_cor_marrage$co_per)
+DF_empdata_cor_marrage<-DF_empdata_cor_marrage[order(DF_empdata_cor_marrage$abs_co_per),]
+DF_empdata_cor_marrage
+#View(DF_empdata_cor_marrage)
+
+#Build a Bar chart to compare the corelaation in emp data
+p_marrage<-ggplot(DF_empdata_cor_marrage ,aes(Attribute,abs_co_per, fill=Attribute,label = abs_co_per))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Marrial Status and Attrition Correlation") + labs(x = "Marrital Status",y="Correlation %")
+
+p_marrage
+
+#Plot for Overtime correlation
+DF_empdata_cor_ot<-data.frame(c("Yes","No"),
+                               c(co_ot_yes,co_ot_no))
+
+colnames(DF_empdata_cor_ot)<-c("Attribute","Coorelation")
+DF_empdata_cor_ot$co_per<-(DF_empdata_cor_ot$Coorelation*100)
+DF_empdata_cor_ot$abs_co_per<-abs(DF_empdata_cor_ot$co_per)
+DF_empdata_cor_ot<-DF_empdata_cor_ot[order(DF_empdata_cor_ot$abs_co_per),]
+DF_empdata_cor_ot
+#View(DF_empdata_cor_ot)
+#Build a Bar chart to compare the corelaation in emp data(Marrage)
+p_ot<-ggplot(DF_empdata_cor_ot ,aes(Attribute,abs_co_per, fill=Attribute,label = abs_co_per))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Over Time and Attrition Correlation") + labs(x = "Over Time",y="Correlation %")
+p_ot
+
+
+#Plot for Total Working Years correlation
+DF_empdata_cor_twy<-data.frame(c("TWY<=10","TWY<=20", "TWY<=30","TWY<=40"),
+                               c(co_tot_y_10,co_tot_y_20,co_tot_y_30,co_tot_y_40))
+
+colnames(DF_empdata_cor_twy)<-c("Attribute","Coorelation")
+#DF_empdata_cor_twy
+DF_empdata_cor_twy$co_per<-(DF_empdata_cor_twy$Coorelation*100)
+DF_empdata_cor_twy$abs_co_per<-abs(DF_empdata_cor_twy$co_per)
+DF_empdata_cor_twy<-DF_empdata_cor_twy[order(DF_empdata_cor_twy$abs_co_per),]
+DF_empdata_cor_twy
+#View(DF_empdata_cor_twy)
+
+#Build a Bar chart to compare the corelaation in emp data
+p_twy<-ggplot(DF_empdata_cor_twy ,aes(Attribute,abs_co_per, fill=Attribute,label = abs_co_per))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Total Working Year and Attrition Correlation") + labs(x = "Total Working Year",y="Correlation %")
+
+p_twy
+
+
+
+#Plot for Stock Option correlation
+DF_empdata_cor_st_Opt<-data.frame(c("St_Opt_0","St_Opt_1", "St_Opt_2","St_Opt_3"),
+                               c(co_st_op_0,co_st_op_1,co_st_op_2,co_st_op_3))
+
+colnames(DF_empdata_cor_st_Opt)<-c("Attribute","Coorelation")
+#DF_empdata_cor_st_Opt
+DF_empdata_cor_st_Opt$co_per<-(DF_empdata_cor_st_Opt$Coorelation*100)
+DF_empdata_cor_st_Opt$abs_co_per<-abs(DF_empdata_cor_st_Opt$co_per)
+DF_empdata_cor_st_Opt<-DF_empdata_cor_st_Opt[order(DF_empdata_cor_st_Opt$abs_co_per),]
+DF_empdata_cor_st_Opt
+#View(DF_empdata_cor_twy)
+
+#Build a Bar chart to compare the corelaation in emp data
+p_St_Opt<-ggplot(DF_empdata_cor_st_Opt ,aes(Attribute,abs_co_per, fill=Attribute,label = abs_co_per))+
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Stock Option and Attrition Correlation") + labs(x = "Stock Optionr",y="Correlation %")
+
+p_St_Opt
+
+
+
+# Hight corelation is Attristion are OverTime, TotalWorkingYears, StockOptionLevel, JobLevel, Age, MaritalStatus
+
+```
+
+
+### **Heat Map**
+
+```{r}
+# heatmap
+library(purrr)
+#View(emp_data)
+str(emp_data)
+my_palette <- colorRampPalette(c("red", "white", "black"))
+heatmapper <- function(df){
+  df %>%
+        keep(is.numeric) %>%
+        tidyr::drop_na() %>%
+        cor %>%
+        heatmap.2(col = my_palette ,
+        density.info = "none", trace = "none",
+        dendogram = c("both"), symm = F,
+        symkey = T, symbreaks = T, scale = "none",
+        key = T)
+}
+heatmapper(mod_emp_data)
+
+
+```
+
+### **Corelation Map (Correlogram)**
+
+```{r,}
+
+correlator  <-  function(df){
+  df %>%
+    keep(is.numeric) %>%
+    tidyr::drop_na() %>%
+    cor %>%
+    corrplot( addCoef.col = "white", number.digits = 2,
+              number.cex = 0.5, method="square",
+              order="hclust", title="Variable Corr Heatmap",
+              tl.srt=45, tl.cex = 0.8)
+}
+correlator(mod_emp_data)
+
+
+
+```
+
+### **Attrition Model**
+
+
+```{r,}
+#Read the CSV file
+no_att<-read.csv("https://raw.githubusercontent.com/BivinSadler/MSDS-6306-Doing-Data-Science/master/UNIT%2014/CaseStudy2CompSet%20No%20Attrition.csv", header = TRUE,sep = ",")
+#View(no_att)
+#head(trg_emp)
+#dim(trg_emp) 
+#head(tst_emp)
+#dim(tst_emp)
+#remove NAs from trg and tst file
+trg_emp<-na.omit(trg_emp)
+tst_emp<-na.omit(tst_emp)
+no_att<-na.omit(no_att)
+#trg_emp_m<-as.matrix(trg_emp)
+
+#knn_fit_trg with Job Level and Total Working years
+result=class::knn(trg_emp[,c(16,30)],tst_emp[,c(16,30)],trg_emp$Attrition,k=3)
+
+#dim(trg_emp)
+#dim(tst_emp)
+#result
+tst_emp$Attrition_pred=result
+#result
+#tst_emp
+#View(emp_data)
+#View(no_att)
+
+confusionMatrix(table(tst_emp$Attrition,tst_emp$Attrition_pred))
+
+# Create and upload the Case2PredictionsXXXX Attrition.csv
+result_no_att=class::knn(trg_emp[,c(16,30)],no_att[,c(15,29)],trg_emp$Attrition,k=3)
+no_att$Attrition_pred=result_no_att
+no_att<-no_att[order(no_att$ID),]
+#View(no_att)
+write.csv(no_att, file = "Case2Predictions_Rai_Attrition.csv", row.names = FALSE)
+
+
+```
+
+### **Monthly Salary Model**
+
+```{r,}
+#head(emp_data)
+#head(Trg_emp)
+#dim(trg_emp)
+#dim(tst_emp)
+
+#Create a training model
+fit_trg_emp<-lm(MonthlyIncome~JobLevel+JobRole+TotalWorkingYears, data=trg_emp)
+#fit_trg_emp<-lm(MonthlyIncome~JobLevel+JobRole+PercentSalaryHike+PerformanceRating+TotalWorkingYears+YearsSinceLastPromotion+YearsWithCurrManager+RelationshipSatisfaction, data=trg_emp)
+summary(fit_trg_emp) 
+#Create a test model
+#fit_tst_emp<-lm(MonthlyIncome~Attrition + Age + BusinessTravel + DailyRate + Department + DistanceFromHome + Education + EducationField + EnvironmentSatisfaction + Gender + HourlyRate + JobInvolvement + JobLevel + JobRole + JobSatisfaction + MaritalStatus + MonthlyRate + NumCompaniesWorked + OverTime + PercentSalaryHike + PerformanceRating + RelationshipSatisfaction + StockOptionLevel + TotalWorkingYears + TrainingTimesLastYear + WorkLifeBalance + YearsAtCompany + YearsInCurrentRole + YearsSinceLastPromotion + YearsWithCurrManager, data=tst_emp)
+#summary(fit_tst_emp)
+
+#Preditc model
+trg_emp_pred <-predict(fit_trg_emp,newdata = tst_emp) 
+trg_emp_mse<-mean((trg_emp_pred-tst_emp$MonthlyIncome )^2)
+tst_emp$Pred_Monthly_Sal<-predict(fit_trg_emp,newdata = tst_emp)
+#View(tst_emp)
+trg_emp_mse
+trg_emp_rmse<-trg_emp_mse^(1/2)
+trg_emp_rmse
+head(trg_emp_pred)
+head(tst_emp$MonthlyIncome)
+no_sal<-read_excel("CaseStudy2CompSet_No_Salary.xlsx")
+
+#View(no_sal)
+no_sal$Pred_Monthly_Sal<-predict(fit_trg_emp,newdata = no_sal)
+#View(no_sal)
+#head(no_sal)
+no_sal<-no_sal[order(no_sal$ID),]
+#View(no_sal)
+DF_empdata_cor_main<-DF_empdata_cor_main[order(DF_empdata_cor_main$abs_co_per),]
+write.csv(no_sal, file = "Case2Predictions_Rai_Salary.csv", row.names = FALSE)
+
+#Plot with training data
+plot(trg_emp$TotalWorkingYears,trg_emp$MonthlyIncome,col=trg_emp$JobLevel,pch=as.numeric(trg_emp$JobRole),main="Monthly Income trg")
+
+#Plot with test data and predicted data
+plot(tst_emp$TotalWorkingYears,tst_emp$MonthlyIncome,col=tst_emp$JobLevel,pch=as.numeric(tst_emp$JobRole),main="Monthly Income tst  with predict")+
+  points(tst_emp$TotalWorkingYears,tst_emp$Pred_Monthly_Sal,col="orange",pch=as.numeric(tst_emp$JobRole))
+
+# Plot no_Sal data
+plot(no_sal$TotalWorkingYears,no_sal$Pred_Monthly_Sal,col=no_sal$JobLevel,pch=as.numeric(as.factor(no_sal$JobRole)), main="Monthly Income no_sal")
+
+
+
+```
+### **Intresting Facts**
+```{r,}
+
+
+#Stack chart Education
+
+p1<-ggplot(emp_data, aes(x = Education, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  
+  labs(title = "Attrition Vs Education", x = "Education", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart Age
+p2<-ggplot(emp_data, aes(x = Age, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs Age", x = "Age", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart BusinessTravel
+p3<-ggplot(emp_data, aes(x = BusinessTravel, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs BusinessTravel", x = "BusinessTravel", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart EducationField
+p4<-ggplot(emp_data, aes(x = EducationField, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs EducationFieldl", x = "EducationField", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart JobInvolvement
+p5<-ggplot(emp_data, aes(x = JobInvolvement, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs JobInvolvement", x = "JobInvolvement", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart  JobLevel
+p6<-ggplot(emp_data, aes(x =  JobLevel, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs  JobLevel", x = " JobLevel", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart  JobRole
+p7<-ggplot(emp_data, aes(x =  JobRole, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs  JobRole", x = " JobRole", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   JobSatisfaction
+p8<-ggplot(emp_data, aes(x =   JobSatisfaction, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   JobSatisfaction", x = "  JobSatisfaction", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    MaritalStatus
+p9<-ggplot(emp_data, aes(x =    MaritalStatus, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    MaritalStatus", x = "   MaritalStatus", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    MonthlyIncome
+p10<-ggplot(emp_data, aes(x =    MonthlyIncome, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    MonthlyIncome", x = "   MonthlyIncome", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   NumCompaniesWorked
+p11<-ggplot(emp_data, aes(x =   NumCompaniesWorked, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   NumCompaniesWorked", x = "  NumCompaniesWorked", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   Over18
+p12<-ggplot(emp_data, aes(x =   Over18, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   Over18", x = "  Over18", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+
+#Stack chart   Over18
+p13<-ggplot(emp_data, aes(x =    OverTime, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    OverTime", x = "   OverTime", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   Over18
+p14<-ggplot(emp_data, aes(x =    OverTime, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    OverTime", x = "   OverTime", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    OverTime
+p15<-ggplot(emp_data, aes(x =    OverTime, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    OverTime", x = "   OverTime", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    RelationshipSatisfaction
+p16<-ggplot(emp_data, aes(x =    RelationshipSatisfaction, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    RelationshipSatisfaction", x = "   RelationshipSatisfaction", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    StockOptionLeveln
+p17<-ggplot(emp_data, aes(x =StockOptionLevel, y =Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    StockOptionLeveln", x = "StockOptionLeveln", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    TotalWorkingYears
+p18<-ggplot(emp_data, aes(x =    TotalWorkingYears, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    TotalWorkingYears", x = "   TotalWorkingYears", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   YearsAtCompany
+p19<-ggplot(emp_data, aes(x =   YearsAtCompany, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   YearsAtCompany", x = "  YearsAtCompany", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   YearsInCurrentRole
+p20<-ggplot(emp_data, aes(x =   YearsInCurrentRole, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   YearsInCurrentRole", x = "  YearsInCurrentRole", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart   YearsSinceLastPromotion
+p21<-ggplot(emp_data, aes(x =   YearsSinceLastPromotion, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs   YearsSinceLastPromotion", x = "  YearsSinceLastPromotion", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Stack chart    YearsWithCurrManager
+p22<-ggplot(emp_data, aes(x =    YearsWithCurrManager, y = Attrition, fill =Attrition )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Attrition Vs    YearsWithCurrManager", x = "   YearsWithCurrManager", y = "Attrition")+
+  #guides(fill = FALSE) +
+  theme_bw()
+
+#Plot of Attrion on income vs age 
+p23<-plot(emp_data$Age,emp_data$MonthlyIncome,main="Sal vs Age with ATT", col="gray",pch=15)
+points(emp_data_att$Age, emp_data_att$MonthlyIncome,col="red",pch=15)
+legend("topleft", inset=.02, title="Emp Comp Att",
+       c("No", "Yes"), fill=c("gray", "red"), horiz=TRUE, cex=0.8)
+
+#Plot of Attrion on income vs Education
+p24<-plot(emp_data$Education,emp_data$MonthlyIncome,main="Sal vs Education with ATT", col="gray",pch=15)
+points(emp_data_att$Education, emp_data_att$MonthlyIncome,col="red",pch=15)
+legend("topleft", inset=.02, title="Emp Comp Att",
+       c("No", "Yes"), fill=c("gray", "red"), horiz=TRUE, cex=0.8)
+p1
+p2
+p3
+p4
+p5
+p6
+p7
+p8
+p9
+p10
+p11
+p12
+p13
+p14
+p15
+p16
+p17
+p18
+p19
+p20
+p21
+p22
+p23
+p24
+
+
+
+```
+#Job Role Analysis
+
+
+```{r}
+co_age_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$Age))
+co_bus_t_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$BusinessTravel))
+co_dist_h_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$DistanceFromHome))
+co_edu_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$Education))
+co_env_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$EnvironmentSatisfaction))
+co_gen_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$Gender))
+co_job_l_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$JobLevel))
+co_att_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$Attrition))
+co_Job_s_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$JobSatisfaction))
+co_mat_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$MaritalStatus))
+co_mon_i_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$MonthlyIncome))
+co_cop_w_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$NumCompaniesWorked))
+co_ot_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$OverTime))
+co_per_h_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$PercentSalaryHike))
+co_per_r_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$PerformanceRating))
+co_rel_f_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$RelationshipSatisfaction))
+co_st_op_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$StockOptionLevel))
+co_tot_y_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$TotalWorkingYears))
+co_Trg_t_jr<-cor<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$TrainingTimesLastYear))
+co_wok_l_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$WorkLifeBalance))
+co_year_c_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$YearsAtCompany))
+co_year_cr_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$YearsInCurrentRole))
+co_year_lp_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$YearsSinceLastPromotion))
+co_year_crm_jr<-cor(as.numeric(emp_data$JobRole), as.numeric(emp_data$YearsWithCurrManager))
+
+
+
+
+DF_empdata_cor_jr<-data.frame(c("Age","BusinessTravel","DistanceFromHome","Education","EnvironmentSatisfaction","Gender","JobLevel","Attrition","JobSatisfaction","MaritalStatus","MonthlyIncome","NumCompaniesWorked","OverTime","PercentSalaryHike","PerformanceRating","RelationshipSatisfaction", "StockOptionLevel","TotalWorkingYears", "TrainingTimesLastYear","WorkLifeBalance","YearsAtCompany","YearsInCurrentRole","YearsSinceLastPromotion","YearsWithCurrManager"), 
+                           c(co_age_jr,co_bus_t_jr, co_dist_h_jr, co_edu_jr, co_env, co_gen_jr, co_job_l_jr, co_job_r, co_Job_s_jr,co_mat_jr,co_mon_i_jr, co_cop_w_jr, co_ot_jr, co_per_h_jr, co_per_r_jr, co_rel_f_jr, co_st_op_jr, co_tot_y_jr, co_Trg_t_jr, co_wok_l_jr, co_year_c_jr,co_year_cr_jr,co_year_lp_jr,co_year_crm_jr))
+
+colnames(DF_empdata_cor_jr)<-c("Attribute","Coorelation")
+DF_empdata_cor_jr$co_per<-(DF_empdata_cor_jr$Coorelation*100)
+DF_empdata_cor_jr$abs_co_per<-abs(DF_empdata_cor_jr$co_per)
+DF_empdata_cor_jr<-DF_empdata_cor_jr[order(DF_empdata_cor_jr$abs_co_per),]
+DF_empdata_cor_jr
+#View(DF_empdata_cor_jr)
+
+
+#Build a Bar chart to compare the corelaation in emp data
+p_jr<-ggplot(DF_empdata_cor_jr ,aes(x=reorder(Attribute,-abs_co_per),y=abs_co_per, fill=Attribute))+ 
+  geom_bar(stat="identity")+ 
+ theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Attribute Correlation for Job Role") + labs(x = "Attibutes", y = "Correlation %")
+
+p_jr
+
+
+
+#Job Role Pie Chart
+
+
+qty <- c(200,172,153,87,76,53,129)
+jr <- c("Sales Exe", " Research Scientist","Manuf Dir","Healthcare Rep","Sales Repr ","(Other)")
+pct <- round(qty/sum(qty)*100)
+jr <- paste(jr,pct) # add percents to labels 
+jr <- paste(jr,"%",sep=" ") # ad % to labels 
+df = data.frame(slices = qty,labels =  jr)
+ggplot(df,aes(x = factor(1),fill = labels))+
+  ggtitle("Pie Chart for Job Role")+
+  geom_bar(width = 1)+
+  coord_polar(theta = "y")+
+  theme(axis.title = element_blank())
+
+
+#summary(emp_data$JobRole)
+
+# Mean Monthly Income
+mean_jr_sal<-aggregate(emp_data[, 20], list(emp_data$JobRole), mean)
+colnames(mean_jr_sal)<-c("Job_Role","Mean_Monthly_Income")
+mean_jr_sal
+
+p_sal<-ggplot(mean_jr_sal ,aes(x=reorder(Job_Role,-Mean_Monthly_Income),y=Mean_Monthly_Income, fill=Job_Role))+ 
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Job Role and Avg Monthly Income") + labs(x = "Job Role", y = "Average Monthly Income")
+
+#plot(emp_data$Age,emp_data$JobRole,col=emp_data$JobRole,pch=16, main="Job Role and Education")+
+  #legend(emp_data, y=JobRole, col = emp_data$JobRole)
+
+p_sal
+# Mean Age
+
+
+mean_jr_age<-aggregate(emp_data[, 2], list(emp_data$JobRole), mean)
+colnames(mean_jr_age)<-c("Job_Role","Mean_Age")
+
+p_age<-ggplot(mean_jr_age ,aes(x=reorder(Job_Role,-Mean_Age),y=Mean_Age, fill=Job_Role))+ 
+  geom_bar(stat="identity")+ 
+  theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+
+  ggtitle("Job Role and Avg Age") + labs(x = "Job Role", y = "Average Age")
+mean_jr_age
+
+p_age
+
+#plot(emp_data$Age,emp_data$JobRole,col=emp_data$JobRole,pch=16, main="Job Role and Education")+
+#legend(emp_data, y=JobRole, col = emp_data$JobRole)
+
+p_gen<-ggplot(emp_data, aes(x =JobRole, y = Gender, fill =Gender )) + 
+  geom_bar(stat = "identity") +
+  labs(title = "Job Role and Gender", x = "  Job Role", y = "Gender",srt=45)+
+  #guides(fill = FALSE) +
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_gen
+
+hc_m<-nrow(subset(emp_data, emp_data$JobRole=="Healthcare Representative" & emp_data$Gender=="Male"))
+hr_m<-nrow(subset(emp_data, emp_data$JobRole=="Human Resources" & emp_data$Gender=="Male"))
+lt_m<-nrow(subset(emp_data, emp_data$JobRole=="Laboratory Technician" & emp_data$Gender=="Male"))
+mg_m<-nrow(subset(emp_data, emp_data$JobRole=="Manager" & emp_data$Gender=="Male"))
+md_m<-nrow(subset(emp_data, emp_data$JobRole=="Manufacturing Director" & emp_data$Gender=="Male"))
+rs_m<-nrow(subset(emp_data,emp_data$JobRole=="Research Scientist" & emp_data$Gender=="Male"))
+rd_m<-nrow(subset(emp_data,emp_data$JobRole=="Research Director" & emp_data$Gender=="Male"))
+se_m<-nrow(subset(emp_data, emp_data$JobRole=="Sales Executive" & emp_data$Gender=="Male"))
+sr_m<-nrow(subset(emp_data, emp_data$JobRole=="Sales Representative" & emp_data$Gender=="Male"))
+
+
+hc_f<-nrow(subset(emp_data, emp_data$JobRole=="Healthcare Representative" & emp_data$Gender=="Female"))
+hr_f<-nrow(subset(emp_data, emp_data$JobRole=="Human Resources" & emp_data$Gender=="Female"))
+lt_f<-nrow(subset(emp_data, emp_data$JobRole=="Laboratory Technician" & emp_data$Gender=="Female"))
+mg_f<-nrow(subset(emp_data, emp_data$JobRole=="Manager" & emp_data$Gender=="Female"))
+md_f<-nrow(subset(emp_data, emp_data$JobRole=="Manufacturing Director" & emp_data$Gender=="Female"))
+rs_f<-nrow(subset(emp_data,emp_data$JobRole=="Research Scientist" & emp_data$Gender=="Female"))
+rd_f<-nrow(subset(emp_data, emp_data$JobRole=="Research Director" & emp_data$Gender=="Female"))
+se_f<-nrow(subset(emp_data, emp_data$JobRole=="Sales Executive" & emp_data$Gender=="Female"))
+sr_f<-nrow(subset(emp_data, emp_data$JobRole=="Sales Representative" & emp_data$Gender=="Female"))
+
+
+jr_gen_df<-data.frame(c("Healthcare Representative","Human Resources","Laboratory Technician","Manager","Manufacturing Director","Research Director","Research Scientist","Sales Executive","Sales Representative"), c(hc_m,hr_m,lt_m,mg_m,md_m,rd_m,rs_m,se_m,sr_m), c(hc_f,hr_f,lt_f,mg_f,md_f,rd_f,rs_f,se_f,sr_f))
+
+colnames(jr_gen_df)<-c("Job_Role","Num_of_Male","Num_of_Female")
+#jr_gen_df
+jr_gen_df$Total<-(jr_gen_df$Num_of_Male+jr_gen_df$Num_of_Female)
+jr_gen_df$Male_per<-(jr_gen_df$Num_of_Male/jr_gen_df$Total)*100
+jr_gen_df$Female_per<-(jr_gen_df$Num_of_Female/jr_gen_df$Total)*100
+jr_gen_df
+jr_gen_df_per<-data.frame(jr_gen_df$Job_Role,jr_gen_df$Male_per,jr_gen_df$Female_per)
+jr_gen_df_per
+
+
+```

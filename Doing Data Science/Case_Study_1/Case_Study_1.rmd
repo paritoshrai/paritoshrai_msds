@@ -1,0 +1,414 @@
+---
+title: "Beers and Breweries an analysis of US Craft Beers"
+author: "Matt Chinchilla, Paritosh Rai"
+date: "6/15/2019"
+output: html_document
+Keep_md: TRUE
+---
+
+```{r, message = FALSE }
+library(knitr)
+library(downloader)
+library(dplyr)
+library(data.table)
+library(ggplot2)
+library(webshot)
+library(kableExtra)
+library(tidyverse)
+library(stringr)
+library(usmap)
+library(readxl)
+```
+### Executive Summary
+
+The following report is an analysis of craft beer and breweries in the United States. The analysis was based on a sample data of 2410 beers and 558 brewries. The analysis below covers the following:
+
+* How many breweries there are per state.
+* An analysis that identifies missing values from the data sets provided.
+* The computed median alcohol content and median bitterness unit for each state.
+* Identification of the beer with the highest alchol by volume (ABV) and the most bitter beer (IBU).
+* Summary statistics of alchol by volume (ABV).
+* Analysis of alchol content vs bitterness to identify any relationship between the two.
+
+Observations:
+There are an average of 10.9 craft breweries per-state in the US. Colorado leads with 47 brewries including Upslope Brewing Company in Boulder which produces the beer with the highest alcohol content "Lee Hill Series Vol. 5" a Belgian Style Quadrupel Ale that's 13% alcohol by volume. The  average ABV of craft beers represented in this data is .059 or 6% alchol by volume. Oregon is home to the bitterest beer "Bitter Bitch Imperial IPA" produced by Astoria Brewing Company it's IBU is 138. There also seems to be a relationship between alcohol content and bitterness. The analysis below shows that in general the higher the alcohol content the higher the IBU or bitterness.
+
+Please refer any questions or comments to analysis team of Matthew Chinchilla and Paritosh Rai.
+
+
+
+
+
+#### Number of Breweries in each state. 
+###### <i>Note the list is in a scroll box, scroll to see more values.</i>
+```{r}
+#Read in Brewries.csv file
+brewires<-read.csv("Brewries.csv")
+
+#Create a data frame BrewCount with the calculated count of the number of brewries in each state.
+BrewCount <- brewires %>% count(brewires$State)
+
+#Update the names of the BrewCount data frame to "State" and "No. of Brewries"
+names(BrewCount)<-c("State","No. of Brewires")
+
+#Rearrange the counts in descending order
+BrewCount <- arrange(BrewCount, desc(BrewCount$`No. of Brewires`))
+
+#Display the Counts in a styled table
+kable(BrewCount) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), fixed_thead = TRUE, full_width = FALSE, position = "left") %>% scroll_box(width = "150%", height = "500px")
+
+```
+
+```{r, message = FALSE}
+#plot us map using states file 
+#keep fill value to "0" so fill values remains numerical
+data(usmap)
+States_Map<-ggplot(us_map("state")) + 
+  geom_polygon(aes(x = long, y = lat, fill = 0, group = group), color = "white")
+
+#guides(fill = FALSE) 
+
+state_name_abb<-read.csv("https://raw.githubusercontent.com/Chinchillin1981/CaseStudy1_Matt_Paritosh/a5e17a7b0820dcee785e006653d05874465fc2e7/state_name_abb.csv", header=FALSE,sep=",")
+
+#convert to data frame
+state_name_abb<-data.frame(state_name_abb)
+
+BrewCount2<-within(BrewCount,V2<- substring(BrewCount$State,2,3))
+
+#Merge BrewCount and state_name_abb table with state.abbState
+BrewCount_M<-merge(data.frame(BrewCount2),data.frame(state_name_abb),by.x="V2",by.y="V2")
+
+#merge the BrewCount_M file with state map files using state full name
+
+US_State_Brew<-merge(data.frame(us_map("states")),data.frame(BrewCount_M),by.x = "full",by.y="V1")
+#Verify the merger
+
+
+#Plot the map
+#comment out guide so we get the legent
+state_brew_map<-States_Map  +
+  geom_polygon(data = US_State_Brew,aes(x = long, y = lat, fill = No..of.Brewires , group = group),color = "white") +
+  #guides(fill=FALSE) +
+  ggtitle("Breweries per State") +
+  theme_void()
+#put map with log scale
+state_brew_map1<-state_brew_map+
+  scale_fill_gradientn(colours = rev(rainbow(7)),
+                       breaks = c(2, 4, 10, 100, 1000, 10000))#,
+                      trans = "log10"
+
+state_brew_map1
+
+```
+
+#### The two data sources beers.csv and brewries.csv were merged together for analysis purposes. The new data set was named beers_brew
+```{r}
+#read in the beers file
+beers<-read.csv("beers.csv")
+
+#merge the beers and brewries files
+beers_brew<-merge(data.frame(beers),data.frame(brewires), by.x = "Brewery_id",by.y="Brew_ID")
+
+#Rename the columns in beers_brew
+names(beers_brew) <- c("Brewery_ID", "Beer", "Beer_ID", "ABV", "IBU", "Beer_Syle", "Ounces", "Brewry_Name", "City", "State")
+```
+
+#### The First six observation of beers_brew.
+```{r}
+head(beers_brew) %>% kable(row.names = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+#### The last six observation of beers_brew.
+```{r}
+#Last six observation
+tail(beers_brew) %>% kable(row.names = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+
+#### The analysis below shows the number of missing values for each variable in our complete data set beers_brew.
+```{r}
+#Total number of NA's in each column
+totalna <-colSums(is.na(beers_brew))
+
+
+#Create table of NA Vales
+totalna %>% kable(col.names = c("Number_of_NA")) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE, position = "left")
+```
+#### The pie chart below was created to help visualize the missing values.
+```{r}
+totalna1<-data.frame(totalna)
+totalna1 <- cbind(Row.Names = rownames(totalna1), totalna1)
+colnames(totalna1)<-c("Variables","Number_of_NA")
+
+
+# Add label position
+totalna1 <- totalna1 %>%
+  #arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(Number_of_NA) - 0.5*Number_of_NA)
+
+mycols <- c("#868686FF","#0073C2FF", "#0073C2FF","#0073C2FF","#0073C2FF","#0073C2FF", "#0073C2FF","#EFC000FF","#0073C2FF","#0073C2FF")
+
+ggplot(totalna1, aes(x = "", y = Number_of_NA, fill =Variables)) +
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = Number_of_NA), color = "blue")+
+  scale_fill_manual(values = mycols) +
+  ggtitle("Number of NA")+
+  theme_void()
+```
+
+#### The median alcholic content for each craft beer in each state and the District of Columbia is in the bar chart below. 
+```{r}
+#Create a new data frame ABV. 
+ABV <- data.frame(beers_brew$Beer_ID, beers_brew$State, beers_brew$ABV)
+
+#Update the column names of ABV to Beer ID, State, and ABV.
+names(ABV) <- c("Beer_ID","State","ABV")
+
+#Remove any null values in the new table.
+ABV <- na.omit(ABV)
+
+#Create a function to calculate the median.
+myFun <- function(x) { median = median(x)}
+
+#Create a new dataframe Median ABV. The function will be used to calculate median ABV per-state.
+MedianABV <- as.data.frame.table(tapply(ABV$ABV, ABV$State, myFun))
+
+#Update the column names of MedianABV to State and Median ABV.
+names(MedianABV) <- c("State","Median_ABV")
+
+#Build a Bar chart to compare the median ABV per-state
+p<-ggplot(MedianABV ,aes(reorder(MedianABV$State,-Median_ABV),Median_ABV, fill= MedianABV$State)) + geom_bar(stat='identity')+ theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+ ggtitle("Median ABV Per-State") + labs(x = "State", y = "ABV")
+
+p
+```
+
+```{r message=FALSE, warning=FALSE, include=TRUE}
+#read.csv("beers.csv")
+beers<-read.csv("beers.csv")
+#Read in Brewries.csv file
+brewires<-read.csv("Brewries.csv")
+#Merge beers and Brewieres data frames into beers_brew
+beers_brew<-merge(data.frame(beers),data.frame(brewires), by.x = "Brewery_id",by.y="Brew_ID")
+#Create a new data frame ABV. 
+ABV <- data.frame(beers_brew$Beer_ID, beers_brew$State, beers_brew$ABV)
+
+#Update the column names of ABV to Beer ID, State, and ABV.
+names(ABV) <- c("Beer_ID","State","ABV")
+
+#Remove any null values in the new table.
+ABV <- na.omit(ABV)
+
+#Create a function to calculate the median.
+myFun <- function(x) { median = median(x)}
+
+#Create a new dataframe Median ABV. The function will be used to calculate median ABV per-state.
+MedianABV <- as.data.frame.table(tapply(ABV$ABV, ABV$State, myFun))
+
+
+#plot us map using states file 
+#keep fill value to "0" so fill values remains numerical
+data(us_map(region="state"))
+
+States_Map<-ggplot(us_map("states")) + 
+  geom_polygon(aes(x = long, y = lat, fill = 0, group = group), color = "white") 
+#guides(fill = FALSE) 
+
+state_name_abb<-read.csv("https://raw.githubusercontent.com/Chinchillin1981/CaseStudy1_Matt_Paritosh/a5e17a7b0820dcee785e006653d05874465fc2e7/state_name_abb.csv", header=FALSE,sep=",")
+
+#convert to data frame
+state_name_abb<-data.frame(state_name_abb)
+
+MedianABV1<-MedianABV
+
+#convert to data form
+MedianABV1<-data.frame(MedianABV1)
+
+#remove the blanks
+MedianABV1<-within(MedianABV1,V2<- substring(MedianABV1$Var1,2,3))
+
+#Merge BrewCount and state_name_abb table with state.abbState
+BeerMedianABV_M<-merge(data.frame(MedianABV1),data.frame(state_name_abb),by.x="V2",by.y="V2")
+
+#Change all charater in state name to lower cast as map file use lower case for statename
+BeerMedianABV_M<-within(BeerMedianABV_M,l_state<-tolower(V1))
+#verify the converstion
+
+#merge the BrewCount_M file with state map files using state full name
+US_State_Brew_ABV<-merge(data.frame(us_map("states")),data.frame(BeerMedianABV_M),by.x = "full",by.y="V1")
+
+
+#write.csv(US_State_Brew_ABV,file = "C:\\Paritosh\\SMU\\6306 Doing Data Science\\Case_Study_1\\CaseStudy1_Matt_Paritosh\\ABV1.csv")
+
+#Plot the map
+#comment out guide so we get the legent
+state_brew_ABV_map<-States_Map  +
+  geom_polygon(data = US_State_Brew_ABV,aes(x = long, y = lat, fill = Freq , group = group),color = "white") +
+  # guides(fill=FALSE) +
+  ggtitle("Median Alcohol Content (ABV)")+
+theme_void()
+
+#put map with log scale
+state_brew_ABV_map1<-state_brew_ABV_map+
+  scale_fill_gradientn(colours = rev(rainbow(7)))
+guides(fill=TRUE)#,
+breaks = c(2, 4, 10, 100, 1000, 10000)#,
+trans = "log10"
+
+state_brew_ABV_map1
+
+```
+#### The median IBU bitterness for each craft beer in each state and the District of Columbia is in the bar chart below. 
+<i>Note SD is not listed because the IBU data was not available for the beers in this state.</i>
+```{r}
+#Create a new data frame IBU. 
+IBU <- data.frame(beers_brew$Beer_ID, beers_brew$State, beers_brew$IBU)
+
+#Update the column names of IBU to Beer ID, State, and IBU.
+names(IBU) <- c("Beer_ID","State","IBU")
+
+#Remove any null values in the new table.
+IBU <- na.omit(IBU)
+
+#Create a function to calculate the median.
+myFun <- function(x) { median = median(x)}
+
+#Create a new dataframe Median IBU. The function will be used to calculate median IBU per-state.
+MedianIBU <- as.data.frame.table(tapply(IBU$IBU, IBU$State, myFun))
+
+#Update the column names of MedianIBU to State and Median IBU.
+names(MedianIBU) <- c("State","Median_IBU")
+
+#Remove SD because it does not have a median value
+MedianIBU <- na.omit(MedianIBU)
+
+#Build a Bar chart to compare the median IBU per-state
+p1<-ggplot(MedianIBU ,aes(reorder(MedianIBU$State,-Median_IBU),Median_IBU, fill= MedianIBU$State)) + geom_bar(stat='identity')+ theme(text=element_text(size=10),plot.title = element_text(hjust = 0.5),legend.position="none", axis.text.x = element_text(angle = 90))+ ggtitle("Median IBU Per-State") + labs(x = "State", y = "IBU")
+
+p1
+```
+
+
+```{r message=FALSE, warning=FALSE, include=TRUE}
+
+#read.csv("beers.csv")
+beers<-read.csv("beers.csv")
+#Read in Brewries.csv file
+brewires<-read.csv("Brewries.csv")
+#Merge beers and Brewieres data frames into beers_brew
+beers_brew<-merge(data.frame(beers),data.frame(brewires), by.x = "Brewery_id",by.y="Brew_ID")
+#Create a new data frame IBU. 
+IBU <- data.frame(beers_brew$Beer_ID, beers_brew$State, beers_brew$IBU)
+#Update the column names of IBU to Beer ID, State, and IBU.
+names(IBU) <- c("Beer_ID","State","IBU")
+#Remove any null values in the new table.
+IBU <- na.omit(IBU)
+#Create a function to calculate the median.
+myFun <- function(x) { median = median(x)}
+#Create a new dataframe Median IBU. The function will be used to calculate median IBU per-state.
+MedianIBU <- as.data.frame.table(tapply(IBU$IBU, IBU$State, myFun))
+#Update the column names of MedianIBU to State and Median IBU.
+names(MedianIBU) <- c("State","Median_IBU")
+#Remove SD because it does not have a median value
+MedianIBU <- na.omit(MedianIBU)
+#plot us map using states file 
+#keep fill value to "0" so fill values remains numerical
+#data(us_map("state"))
+States_Map<-ggplot(us_map("state")) + 
+  geom_polygon(aes(x = long, y = lat, fill = 0, group = group), color = "white")
+ 
+#guides(fill = FALSE) 
+state_name_abb<-read.csv("https://raw.githubusercontent.com/Chinchillin1981/CaseStudy1_Matt_Paritosh/a5e17a7b0820dcee785e006653d05874465fc2e7/state_name_abb.csv", header=FALSE,sep=",")
+
+
+#convert to data frame
+state_name_abb<-data.frame(state_name_abb)
+#move data from MedianIBU to MedianIBU1
+MedianIBU1<-MedianIBU
+
+#move data from MedianIBU to MedianIBU1
+MedianIBU1<-data.frame(MedianIBU1)
+#head(MedianIBU1)
+MedianIBU1<-within(MedianIBU,V2<- substring(MedianIBU$State,2,3))
+#head(BeerMedianIBU1)
+#Merge BrewCount and state_name_abb table with state.abbState
+BeerMedianIBU_M<-merge(data.frame(MedianIBU1),data.frame(state_name_abb),by.x="V2",by.y="V2")
+#view the merger
+#head(BeerMedianIBU_M)
+#Change all charater in state name to lower cast as map file use lower case for statename
+BeerMedianIBU_M<-within(BeerMedianIBU_M,l_state<-tolower(V1))
+#verify the converstion
+#head(BeerMedianIBU_M)
+#head(us_map("state"))
+#merge the BrewCount_M file with state map files using state full name
+US_State_Brew_IBU<-merge(data.frame(us_map("state")),data.frame(BeerMedianIBU_M),by.x = "full",by.y="V1")
+
+write.csv(US_State_Brew_IBU,"C:\\Paritosh\\SMU\\6306 Doing Data Science\\Case_Study_1\\CaseStudy1_Matt_Paritosh\\IBU0.csv")
+US_State_Brew_IBU<-read.csv("https://raw.githubusercontent.com/Chinchillin1981/CaseStudy1_Matt_Paritosh/master/US_State_Brew_IBU.csv", header=TRUE,sep=",")
+#Convert to data frame
+US_State_Brew_IBU<-data.frame(US_State_Brew_IBU)
+
+
+#Plot the map
+#comment out guide so we get the legent
+state_brew_IBU_map<-States_Map  +
+  geom_polygon(data = US_State_Brew_IBU,aes(x = long, y = lat, fill = Median_IBU , group = group),color = "white") +
+  #guides(fill=FALSE) +
+  ggtitle("Median International Bitterness Unit (IBU)")+ 
+theme_void()
+#state_brew_IBU_map 
+#put map with log scale
+state_brew_IBU_map1<-state_brew_IBU_map+
+  scale_fill_gradientn(colours = rev(rainbow(7)))
+guides(fill=TRUE)#,
+breaks = c(2, 4, 10, 100, 1000, 10000)#,
+trans = "log10"
+
+state_brew_IBU_map1
+
+```
+
+
+#### Colorado is the state with the beer with the highest alcohol content in the US. Lee Hill Vol.5 - Belgian Style Quadrupel Ale has an ABV of .128 (13% alcohol content). This beer is prodcuced by Uposlope Brewing Company in Boulder.
+```{r}
+#View The row for maximum ABV value (Alcohol content)
+beers_brew[which.max(beers_brew$ABV),] %>% kable(row.names = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+
+
+
+
+#### Orgon is home to the Bitterest Beer "Bitter Bitch Imperial IPA" this beer has an IBU of 138. It's an American Double/Imperial IPA style. The brewery that produces this beer is Astroria Brewing Company located in Astoria.
+```{r}
+#View the row with max IBU value (bitterness)
+beers_brew[which.max(beers_brew$IBU),] %>% kable(row.names = FALSE) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+```
+ 
+
+#### Below are summary statistics for Alcoholic content. 
+```{r, message= FALSE}
+#Summarise the ABV variable in the beer_brew table
+ABVSummary <- summary(beers_brew$ABV)
+
+#Create table
+as.array(ABVSummary) %>% kable(col.names = c("Measure","Value")) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"), full_width = FALSE, position = "left")
+```
+
+#### The scatter plot below shows the relationship between alcohol content (ABV) in each beer and bitterness. The plot seems to indicate that beers high in alchol are generally high on the IBU scale as well.
+<i>Note: 1005 observations were missing either IBU or ABV values and are not represented in the plot below. </i>
+```{r}
+#Create a scatter plot 
+p3 <- ggplot(beers_brew, aes(ABV,IBU, color = IBU)) + geom_point(aes(size = Ounces)) + labs(title = "Alchol Content vs Bitterness", x = "Alcohol Content (ABV)", y = "Bitterness (IBU)")
+
+#Add the Color gradient scale blue = low Bitterness, high = high bitterness
+p4 <-p3 + scale_color_gradient(low = "blue", high = "green")
+
+p4
+```
+
+
+#### Links to Youtube Presentation Video's
+
+Matt Chinchilla - https://youtu.be/1ajOqgPv7CM
+
+Paritosh Rai - https://www.youtube.com/watch?v=k3RoraALpDM&t=15s

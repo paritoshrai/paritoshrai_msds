@@ -1,0 +1,717 @@
+---
+title: "Rajesh Paritosh TimeSeries Final Project"
+author: "Rajesh & Paritosh"
+date: "11/11/2021"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '6'
+  github_document: 
+    toc: yes
+    toc_depth: 6
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Include libraries
+
+```{r message=FALSE, warning=FALSE}
+
+library(tswge)
+library(tidyverse)
+library(tidyquant)
+library(skimr)
+library(plyr)
+library(DataExplorer)
+source('roll.win.ase.wge.R')
+library(ggplot2)
+library(tseries)
+library(kableExtra)
+library(knitr)
+library(vars)
+library(RColorBrewer)
+library(nnfor)
+library(GGally)
+```
+# Introduction
+
+Metro Interstate Traffic Volume Time Series Analysis for Minneapolis-St Paul, MN
+The analysis is on dataset of hourly Interstate 94 Westbound traffic volume for MN DoT ATR station 301, roughly midway between Minneapolis, MN and St Paul, MN. 
+Hourly weather features and holidays included for impacts on traffic volume. 
+This analysis will help in better urban planning, maintenance planning,lowering congestion level and increasing driver safety by forecasting the traffic volume for a future timeframe. 
+
+
+# Data Description
+
+- holiday: Categorical: US National holidays plus regional holiday, Minnesota State Fair 
+- temp: Numeric: Average temp in kelvin 
+- rain_1h: Numeric: Amount in mm of rain that occurred in the hour 
+- snow_1h: Numeric: Amount in mm of snow that occurred in the hour 
+- clouds_all: Numeric: Percentage of cloud cover 
+- weather_main: Categorical: Short textual description of the current weather 
+- weather_description: Categorical: Longer textual description of the current weather 
+- date_time: DateTime: Hour of the data collected in local CST time 
+- traffic_volume: Numeric: Hourly I-94 ATR 301 reported westbound traffic volume
+
+
+
+##Common Functions
+
+```{r}
+# default value for n.ahead. will be overridden by the calling function
+
+# Initialize the variable for short term
+n.ahead = 10 
+# table holder to holdASE for all models
+results_ase = tribble(~model_name, ~forcastahead, ~ase)
+
+
+# calculate  ASE
+calculate_ase = function(model_forecast, timeseries_data, n.ahead){
+  n = length(timeseries_data)
+  ase = mean((timeseries_data[(n-n.ahead+1):n] - model_forecast$f)^2)
+  return(ase)
+}
+
+# calculate  ASE for test data
+calculate_ase_test_data = function(model_forecast, timeseries_data, n.ahead){
+  n = length(timeseries_data)
+  ase = mean((timeseries_data[1:n.ahead] - model_forecast)^2)
+  return(ase)
+}
+
+```
+
+
+# Data Initialization
+
+```{r}
+# Read data from csv
+data_MITV = read.csv("data/metro_interstate_traffic_volume.csv", header = TRUE)
+
+```
+
+# Data Summary Statistics
+
+
+```{r}
+data_MITV %>%  glimpse()
+data_MITV %>% skimr::skim()
+```
+
+# Missing Data
+```{r}
+data_MITV %>% plot_missing(ggtheme = theme_tq())
+```
+
+# Categorical Data
+
+```{r}
+data_MITV %>% plot_bar(ggtheme = theme_tq(), ncol = 1, nrow = 1)
+
+```
+#Numerical variable
+
+```{r}
+#Numerical variable
+data_MITV %>% plot_histogram(ggtheme = theme_tq(), nrow = 2, ncol = 3)
+
+```
+## More EDA
+
+```{r}
+# re arranger the Column
+
+ggpairs(data_MITV[, c(2,5,9)]) #matrix of scatter plots
+
+tsData = ts(data_MITV$traffic_volume, start = c(2012,1), frequency = 24)
+components.ts = decompose(tsData)
+plot(components.ts, col="blue")
+
+# Check the frequency of the time series data
+frequency(tsData)
+
+# Check the cycle of the time series
+cycle(tsData)
+
+# boxplot function to see any seasonal effects.
+boxplot(tsData~cycle(tsData),xlab="Hours", ylab = "Traffic Hours" ,main ="Daily Traffic on MN", col="red")
+
+```
+
+```{r}
+
+data_MITV_Detailed = tidyr::separate(data_MITV, date_time, c("date", "time"), sep = " ")
+
+data_MITV_Detailed = tidyr::separate(data_MITV_Detailed, time, c("time"), sep = ":")
+
+data_MITV_Detailed <- tidyr::separate(data_MITV_Detailed, date, c("year", "month", "day"), sep = "-")
+
+#Removing Rain_1h and snow_1h as most of the values are 0
+data_MITV_Detailed = data_MITV_Detailed[, -(3:4)]
+
+#Removing weather_main  and weather_description as these two columns are enumerators for clouds_all
+data_MITV_Detailed = data_MITV_Detailed[, -(4:5)]
+
+
+data_MITV_Detailed = data_MITV_Detailed[, -(1)]
+
+data_MITV_Detailed
+```
+
+
+# Split the data into a train and test set
+# there is 7 years of data. So we are splitting 6:1 ratio. 6 years of data allocated for training and 1 year allocated for testing
+```{r}
+# split the data into a train and test set
+# there is 7 years of data. So we are splitting 6:1 ratio. 6 years of data allocated for training and 1 year allocated for testing
+data_MITV = data_MITV_Detailed
+
+
+test_dataset_length = as.integer(length(data_MITV$traffic_volume) * 1/7)
+
+data_MITV_train = data_MITV %>% dplyr::slice(1:(dplyr::n()-test_dataset_length))
+data_MITV_test = data_MITV %>% dplyr::slice((dplyr::n()-test_dataset_length): dplyr::n())
+```
+
+
+
+# Stationary / Non-Stationary 
+
+```{r}
+
+plot(data_MITV_train$traffic_volume, type = "l", main = "Time Series Plot", xlab = "Time", ylab = "Time Series Realization")
+plotts.wge(data_MITV_train$traffic_volume)
+len = length(data_MITV_train$traffic_volume)
+len_by_2 = round(len/2)
+seg_2_start = len_by_2+1
+acf(data_MITV_train$traffic_volume[1:len], main = "Full Dataset")
+acf(data_MITV_train$traffic_volume[1:len_by_2], main = "First Half ACF")
+acf(data_MITV_train$traffic_volume[seg_2_start:len], main = "Second Half ACF")
+
+
+```
+
+# ACFs and Spectral Densities
+
+```{r}
+plot_x=plotts.sample.wge(data_MITV_train$traffic_volume, lag.max = 50)
+acf(data_MITV_train$traffic_volume)
+```
+##Realization
+# It is challenging to see any trend or seasonality from the reliazation graph. It appears more like a noise.
+
+## ACF
+# ACF graph shows slowly damping oscillation is a good indicator of seasonality.
+
+## Spectral Density
+# There are multiple peaks are visible in spectral density aligns with ACF indication of seasonality. Futher evaluation will be conducted to identify most dominating frequecy.
+
+
+
+
+
+# Condition 1: Constant Mean
+
+There does not appear to be evidence of a trend in the data.
+There does not appear to be any kind of deterministic oscillation in the data
+
+Therefore, the assumption of constant mean does not appear to be violated.
+
+# Condition 2: Constant Variance
+
+There does not apprear to be evidence of the variance of the realization changing over time.
+Therefore, the assumption of constant variance does not appear to be violated.
+
+# Condition 3: Constant Autocorrelation
+
+The ACF of the first and second half of the realization appear to exhibit similar behavior.
+
+Therefore, the assumption of constant autocorrelation does not appear to be violated.
+
+### Conclusion
+
+Given the above analysis, there does not appear to be sufficient evidence to suggest that the process generating the realization is not stationary.
+We will continue the analysis assuming the process generating the realization is stationary.
+
+
+
+# Since the realization assumened to be Stationary, we shall model this realization using ARMA model.
+#ARMA 
+
+```{r}
+aic5.wge(data_MITV_train$traffic_volume) %>% kable() %>% kable_styling(bootstrap_options = "striped", full_width = F)
+aic5.wge(data_MITV_train$traffic_volume, type="bic") %>% kable() %>%  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+Both AIC and BIC select low order models with an ARMA(5, 1) selected as the best ID by both criteria.
+The following models are selected by both criteria:
+
+* ARMA(5, 1)
+* ARMA(3, 1)
+* ARMA(2, 2)
+* ARMA(5, 0)
+* ARMA(4, 0)
+
+An ARMA(5,1) was fit based on the model Identification from AIC and BIC.
+
+# Factor to identify the roots
+```{r}
+fit_arma = aic.wge(data_MITV_train$traffic_volume, p=5, q=1)
+
+factor.wge(phi = fit_arma$phi)
+factor.wge(phi = fit_arma$theta)
+```
+#The factor table for the fitted Phi's shows two complex roots and there is no root close to unit circle, which is not causing wandering behavior, which infers that this is ARMA model not ARIMA model (d = 1).
+#Based on earlier observation from spectral density graph, dominant frequency is 0.0372, which is closest to the unit circle with Abs.Recip of 0.92078. This is equalent to time period of 27. Other frequencies were ignored as the Abs. recip are not close to unit circle.
+
+Using the factors this could be suggested model fit
+
+( 1-1.7915$B$+0.8478$B^2$ )( 1-0.6211$B$+0.2871$B^2$ )( 1+0.3488$B$ )( $X_{t}$ ) = ( 1-0.7772B )$a_{t}$
+
+
+### Model Fit
+
+```{r}
+var_interest = "traffic_volume"
+batch_size = 24 * 7  # we are selecting 7 days worth of traffic data 24 * 7
+
+```
+
+#Forecast and ASE for ARIMA(5,0,1)
+```{r}
+model_name = "ARIMA(5,0,1)"
+fore_arma_longterm = ""
+
+#Forecast ARIMA(5,0,1) for short term and long term
+
+for (f in c(10, 1000)){
+  fore_arma = fore.arma.wge(data_MITV_train$traffic_volume, phi = fit_arma$phi, theta = fit_arma$theta, n.ahead = f, lastn = TRUE, limits = TRUE)
+  
+  #Calculate ASE
+  arma_ase = calculate_ase_test_data(model_forecast = fore_arma$f, timeseries_data = as.integer(data_MITV_test$traffic_volume), n.ahead = f)
+  
+  # Appending all the into a single table for comparison
+  results_ase = results_ase %>% add_row(model_name = model_name, forcastahead = f, ase = arma_ase)
+  if( f == 1000)
+  {
+    fore_arma_longterm = fore_arma
+  }
+  
+  
+  #Plot Realization and forecast with ARIMA(5,0,1)
+  plot(fore_arma$f, type = "l")
+  plot(seq(1,f ,1), data_MITV_test$traffic_volume[1:f], type = "l", 
+       xlim = c(0, f*2), ylab = "Traffic Volume", main = cat(f, " Hours of Traffic Forecast"))
+  lines(seq(0, f-1, 1), fore_arma$f, type = "l", col = "red")
+}
+
+ results_ase
+```
+### Determining right seasonality
+### ARIMA with d = 0 and with Seasonality 2, 12, 24 and 27
+```{r}
+forcast_ahead = 10
+results_seasonility = tribble(~seasonality, ~best_p, ~best_q, ~best_aic)
+
+for (f in c(10, 1000)){
+  for (s in c(2,12,24,27)){
+  
+    no_seasonality = artrans.wge(data_MITV_train$traffic_volume, phi.tr = c(rep(0, s-1),1), plottr = TRUE)
+  
+    grid = aic5.wge(no_seasonality)
+    best_aic = grid$`       aic`[1]
+    best_p = grid$`   p`[1]
+    best_q = grid$`   q`[1]
+    
+    results_seasonility = results_seasonility %>% add_row(seasonality = s, best_p = best_p, best_q = best_q, best_aic = best_aic)
+    
+    model_name = paste('ARIMA(5,0,1) s = ', s)
+    
+    fit_arma_s = aic.wge(data_MITV_train$traffic_volume, p=best_p, q=best_q)
+    
+    fore_arma_s = fore.aruma.wge(data_MITV_train$traffic_volume, phi = fit_arma_s$phi, theta = fit_arma_s$theta, d = 0, s=s, n.ahead = f, lastn = TRUE, limits = FALSE)
+
+    
+    arma_ase_s = calculate_ase_test_data(model_forecast = fore_arma_s$f, timeseries_data = as.integer(data_MITV_test$traffic_volume), n.ahead = f)
+    # Appending all the into a single table for comparison
+    
+    results_ase = results_ase %>% add_row(model_name = model_name, forcastahead = f, ase = arma_ase_s)
+    
+    
+   #Plot Realization and forecast with ARIMA(5,0,1) with seasonality
+    plot(fore_arma_s$f, type = "l")
+    plot(seq(1,f,1), data_MITV_test$traffic_volume[1:f], type = "l", xlim = c(0,f*2), ylab = "Traffic Volume", main = paste(f, " Hours of Traffic Forecast with s = ", s ," d = 0, p = " , best_p, " q = ", best_q ))
+    lines(seq(0, f-1 , 1), fore_arma_s$f, type = "l", col = "red")
+    
+  }
+}
+
+results_seasonility %>% arrange(best_aic)
+
+results_ase %>% arrange(ase)
+```
+
+
+```{r}
+# forecast future
+forcast_ahead = 1000
+
+fore_arma = fore.arma.wge(data_MITV_train$traffic_volume, phi = fit_arma$phi, theta = fit_arma$theta, n.ahead = forcast_ahead, lastn = FALSE, limits = TRUE)
+
+record_count = length(data_MITV_train$traffic_volume)
+sample_data = data_MITV_train$traffic_volume[record_count - (record_count - 1000): record_count]
+
+record_count = length(sample_data)
+
+plot(fore_arma$f, type = "l")
+plot(seq(1,record_count,1), sample_data, type = "l", 
+     xlim = c(0,record_count + 1000), ylab = "Traffic Volume", main = "1000 Hours of Traffic Forecast with s = 24 d = 0, p = 5, q = 2")
+lines(seq(record_count  , record_count + 1000 -1, 1), fore_arma$f, type = "l", col = "red")
+
+
+
+# forecast future
+forcast_ahead = 10
+
+fore_arma_10 = fore.arma.wge(data_MITV_train$traffic_volume, phi = fit_arma$phi, theta = fit_arma$theta, n.ahead = forcast_ahead, lastn = FALSE, limits = TRUE)
+
+record_count = length(data_MITV_train$traffic_volume)
+sample_data = data_MITV_train$traffic_volume[record_count - (record_count - 1000): record_count]
+
+record_count = length(sample_data)
+
+plot(fore_arma_10$f, type = "l")
+plot(seq(1,record_count,1), sample_data, type = "l", 
+     xlim = c(0,record_count + 10), ylab = "Traffic Volume", main = "1000 Hours of Traffic Forecast with s = 24 d = 0, p = 5, q = 2")
+lines(seq(record_count  , record_count + 10-1, 1), fore_arma_10$f, type = "l", col = "red")
+
+```
+
+```{r}
+forcast_ahead = 10
+last90day = length(data_MITV_train$traffic_volume) - 24*90
+totalrecords = length(data_MITV_train$traffic_volume)
+rolling_series = data_MITV_train$traffic_volume[totalrecords - last90day: totalrecords]
+
+results_results = roll.win.ase.wge(series = rolling_series, horizon = forcast_ahead, s=24, d=0, phi = 5, theta = 2)
+```
+
+
+
+Viewing the rolling window ASE over time, we see that the most extreme value occurs at the same location as the extreme value of the realization. This is not surprising since an ARMA model will tend toward the mean and this value is far from the window mean.
+
+
+
+#CCf Analysis
+
+```{r}
+lag.max = 100
+var_interest = 'traffic_volume'
+
+for (name in colnames(data_MITV_train)){
+  # By convention, the X2 variable comes first
+  c = ccf(data_MITV_train[name], data_MITV_train[var_interest], lag.max = lag.max)
+  index = which(abs(c$acf[,1,1]) == max(abs(c$acf[,1,1])))
+  max_ccf = c$lag[,1,1][index] 
+  cat(paste("\nFor variable: ", name, " , max cross-correlation is at lag: ", max_ccf, sep = ""))
+}
+
+
+```
+
+
+For variable: temp , max cross-correlation is at lag: 3
+For variable: clouds_all , max cross-correlation is at lag: -11
+For variable: year , max cross-correlation is at lag: -100
+For variable: month , max cross-correlation is at lag: -100
+For variable: day , max cross-correlation is at lag: 20
+For variable: time , max cross-correlation is at lag: 4
+For variable: traffic_volume , max cross-correlation is at lag: 0
+
+Based on the CCF analysis, we find that only 2 variables show a strong cross correlation with `traffic_volume`. The most significant cross correlation was obtained for `temp`, `clouds_all`.  'temp' is positively cross-correlated with 'traffic_volume'. But, CCF Analysis conclusions and values are based on negative lags of the variables with respect to 'traffic volume'. So we only consider lag 11 for clouds_all which is negative lag to keep the analysis simple. 
+
+
+## VAR Model
+The multiple linear regression with correlated errors method does not take into account the possible correlation structure within and among the independent variables.  However, the objective in vector autoregressive (VAR) modeling is to investigate the interrelationships among all variables of interest in order to improve forecasts for one or more of the variables.  Since vector autoregressive models (VAR) models do not distinguish between dependent and independent variables, the goal is to use all of the variables and to simultaneously forecast all variables. 
+
+### Modeling
+
+The VAR models selected by the following process.
+
+BIC was used to select the maximum lag to consider (since we wanted to have a small lag order selection given the large number of exogenous variables and the conclusions from the CCF analysis).
+
+The model of the selected lag was fit.
+In order to reduce the variables further, those variables that were insignificant in the fit were dropped and the maximum lag was reduced further to the maximum significant lag found in the fit. This is a crude variable selection technique. In the future, we will evaluate a better variable selection technique.
+
+```{r}
+
+length_of_train_ds = length(data_MITV_train$traffic_volume)
+train_data_MITV_train = data_MITV_train[1 : (length_of_train_ds - 1000),]
+
+X=cbind(train_data_MITV_train$traffic_volume, train_data_MITV_train$temp, train_data_MITV_train$clouds_all)
+var_select = VARselect(X, lag.max=30,type="both",season=NULL,exogen=NULL)  
+var_select
+
+```
+# Best AIC is with lag 27 
+
+# VAR long term and short term forecast and ASE prediction
+
+y1 = Traffic_Volume; y2 = temperature; y3 = Clouds_all
+```{r}
+# forcast_ahead, 1000 for long term and 10 for short term
+model_VAR = VAR(X,type = 'const', lag.max=27)
+```
+
+
+```{r}
+#summary(model_VAR)
+#AIC(model_VAR) 
+var_pred_longterm = ""
+var_pred_shortterm = ""
+for (f in c(10, 1000)){
+  pred = predict(model_VAR,n.ahead = f)
+
+  plot(pred$fcst$y1[,1], type = "l") 
+  
+  plot(seq(1,f ,1), data_MITV_test$traffic_volume[1:f], type = "l", 
+       xlim = c(0, f), ylab = "Traffic Volume", main = cat(f, " Hours of Traffic Forecast"))
+  lines(seq(1, f, 1), pred$fcst$y1[,1], type = "l", col = "red")
+  if(f == 10)
+  {
+    var_pred_shortterm = pred$fcst$y1[,1]
+  }
+  else if(f == 1000)
+  {
+    var_pred_longterm = pred$fcst$y1[,1]
+  }
+  #Calculate ASE 
+  var_ase = calculate_ase_test_data(pred$fcst$y1[,1], data_MITV_test$traffic_volume, f)
+  
+  results_ase = results_ase %>% add_row(model_name = "VAR with lag 27",forcastahead = f, ase = var_ase)
+}
+results_ase %>% arrange(ase)
+```
+
+#  MLR  - No lAGS
+
+```{r}
+plotts.sample.wge(data_MITV_train$temp)
+plotts.sample.wge(data_MITV_train$clouds_all)
+```
+#MLR Model Fit
+```{r}
+
+fit_mlr_mITV = lm(data_MITV_train$traffic_volume~data_MITV_train$temp+data_MITV_train$clouds_all)
+
+
+```
+
+
+```{r}
+fit_mlr_aic = aic.wge(fit_mlr_mITV$residuals, p=0:10, q=0)
+fit_mlr_aic
+fit_mlr_bic = aic.wge(fit_mlr_mITV$residuals, p=0:10, q=0, type="bic")
+fit_mlr_bic
+
+fit_mlr_arima_aic = arima(data_MITV_train$traffic_volume, c(fit_mlr_aic$p, 0 ,0), xreg = cbind(data_MITV_train$temp, data_MITV_train$clouds_all))
+
+summary(fit_mlr_arima_aic)
+```
+#Multiple Regression Equation
+
+# target_volume = 1473.43 + 6.3677(temp) + -0.0905(clouds_all)
+
+
+
+
+
+
+# ACF, Ljung test and AIC
+
+```{r}
+acf(fit_mlr_arima_aic$residuals)
+ljung.wge(fit_mlr_arima_aic$residuals)
+AIC(fit_mlr_arima_aic) 
+```
+
+#Forecast for short term and ASE 
+```{r}
+mlr_pred_longterm = ""
+mlr_pred_shortterm = ""
+
+for (f in c(10, 1000)){
+  data_MITV_test_1000 = data.frame(temp = data_MITV_test$temp[1:f], clouds_all = data_MITV_test$clouds_all[1:f])
+  
+  mlr.preds = predict(fit_mlr_arima_aic, newxreg = data_MITV_test_1000)
+  if(f == 10)
+  {
+    mlr_pred_shortterm = mlr.preds$pred 
+  }
+  else if(f == 1000)
+  {
+    mlr_pred_longterm = mlr.preds$pred
+  }
+  
+  plot(mlr.preds$pred, type = "l") 
+  
+  plot(seq(1,f ,1), data_MITV_test$traffic_volume[1:f], type = "l", col="#040A99", 
+       xlim = c(0, f*2), ylab = "Traffic Volume", main = cat(f, " Hours of Traffic Forecast"))
+  lines(seq(0, f-1, 1), mlr.preds$pred, type = "l", col = "red")
+   
+  mlr_nolag_ase = calculate_ase_test_data(mlr.preds$pred, data_MITV_test$traffic_volume, f)
+  
+  results_ase = results_ase %>% add_row(model_name = "MLR No Lag",forcastahead = f, ase = mlr_nolag_ase)
+}
+results_ase %>% arrange(ase)
+
+```
+
+
+The null hypothesis in a Ljung-Box test is that the residuals are white noise, so that small p-values provide evidence against white noise.  The default value for number of lags is K=24. We typically use K=24 and K=48. As we can see that p-value is 0. which indicates that it is not  white noise. However, the graphical visualizations of realization, autocorrelation and spectral density shows strong evidence that residuals are white noise. We will be leaning towards visual outcomes.
+
+
+```{r}
+plotts.sample.wge(fit_mlr_arima_aic$resid, arlimits=TRUE)
+ljung.wge(fit_mlr_arima_aic$resid,p=fit_mlr_aic$p)
+ljung.wge(fit_mlr_arima_aic$resid,p=7,K=48)
+```
+
+# Incorporate lagged correlations based on CCF
+
+```{r}
+
+clouds_all.lag = dplyr::lag(data_MITV_train$clouds_all,11)
+
+```
+
+#  MLR  - With lAGS
+
+
+```{r}
+fit_mlr_MITV.lag = lm(data_MITV_train$traffic_volume~data_MITV_train$temp+clouds_all.lag)
+
+fit_mlr_aic.lag = aic.wge(fit_mlr_MITV.lag$residuals, p=0:10, q=0)
+fit_mlr_aic.lag
+fit_mlr_bic.lag = aic.wge(fit_mlr_MITV.lag$residuals, p=0:10, q=0, type="bic")
+fit_mlr_bic.lag
+
+fit_mlr_arima_aic.lag = arima(data_MITV_train$traffic_volume, c(fit_mlr_aic$p, 0 ,0), xreg = cbind(data_MITV_train$temp, data_MITV_train$clouds_all))
+
+summary(fit_mlr_arima_aic.lag)
+```
+
+```{r}
+
+
+acf(fit_mlr_arima_aic.lag$residuals)
+ljung.wge(fit_mlr_arima_aic.lag$residuals)
+AIC(fit_mlr_arima_aic.lag) 
+```
+
+```{r}
+
+for (f in c(10, 1000)){
+  data_MITV_test_1000 = data.frame(temp = data_MITV_test$temp[1:f], clouds_all = data_MITV_test$clouds_all[1:f])
+  
+  mlr.preds.lag = predict(fit_mlr_arima_aic.lag, newxreg = data_MITV_test_1000)
+  
+  plot(mlr.preds.lag$pred, type = "l") 
+  
+  plot(seq(1,f ,1), data_MITV_test$traffic_volume[1:f], type = "l", col="#040A99", 
+       xlim = c(0, f*2), ylab = "Traffic Volume", main = cat(f, " Hours of Traffic Forecast"))
+  lines(seq(0, f-1, 1), mlr.preds.lag$pred, type = "l", col = "red")
+   
+  mlr_lag_ase = calculate_ase_test_data(mlr.preds.lag$pred, data_MITV_test$traffic_volume, f)
+  
+  results_ase = results_ase %>% add_row(model_name = "MLR with Lag",forcastahead = f, ase = mlr_lag_ase)
+}
+results_ase %>% arrange(ase)
+
+```
+
+
+The null hypothesis in a Ljung-Box test is that the residuals are white noise, so that small p-values provide evidence against white noise.  The default value for number of lags is K=24. We typically use K=24 and K=48. As we can see that p-value is 0. which indicates that it is not  white noise. However, the graphical visualizations of realization, autocorrelation and spectral density shows strong evidence that residuals are white noise. We will be leaning towards visual outcomes.
+
+
+```{r}
+plotts.sample.wge(fit_mlr_arima_aic.lag$resid, arlimits=TRUE)
+ljung.wge(fit_mlr_arima_aic.lag$resid,p=fit_mlr_aic$p)
+ljung.wge(fit_mlr_arima_aic.lag$resid,p=7,K=48)
+```
+
+# NN - MLR
+
+```{r}
+
+# test_dataset_length = as.integer(length(data$traffic_volume) * 1/7)
+# 
+# data$date_time = as_datetime(data$date_time)
+# 
+# data_NN_train = data %>% dplyr::slice(1:(dplyr::n()-test_dataset_length))
+# data_NN_test = data %>% dplyr::slice((dplyr::n()-test_dataset_length): dplyr::n())
+length_data = length(data_MITV_train$traffic_volume)
+one_year_data_length = as.integer(length(data_MITV_train$traffic_volume) / 48 )
+start_index = 41000 #length(data_MITV_train$traffic_volume) - one_year_data_length
+
+data.mlp.nn = data.frame(temp = ts(data_MITV_train$temp[start_index : length_data]), clouds_all = ts(data_MITV_train$clouds_all[start_index:length_data]))
+traffic_vol_nn = ts(data_MITV_train$traffic_volume[start_index:length_data])
+
+fit.mlp = mlp(traffic_vol_nn, xreg = data.mlp.nn)
+fit.mlp
+
+```
+
+```{r}
+
+plot(fit.mlp)
+
+for (f in c(10, 1000)){
+  forecast.mlp = forecast(fit.mlp$y, h=f)
+  
+  plot(forecast.mlp$mean, type = "l") 
+  
+  plot(seq(1,f ,1), data_MITV_test$traffic_volume[1:f], type = "l", col="#040A99", 
+       xlim = c(0, f*2), ylab = "Traffic Volume", main = cat(f, " Hours of Traffic Forecast"))
+  lines(seq(0, f-1, 1),  forecast.mlp$mean, type = "l", col = "red")
+   
+  nn_ase = calculate_ase_test_data(forecast.mlp$mean, data_MITV_test$traffic_volume, f)
+  
+  results_ase = results_ase %>% add_row(model_name = "NN - MLP",forcastahead = f, ase = nn_ase)
+}
+results_ase %>% arrange(ase)
+
+
+```
+
+```{r}
+# Ensemble short term
+
+ensemble_shortterm = (mlr_pred_shortterm + var_pred_shortterm)/2
+plot(data_MITV_test$traffic_volume[1:10],type='l',col="#040A99")
+lines(seq(1,10,1),ensemble_shortterm,type = 'l',col='#FF0000',lwd=2)
+
+ensemble_shortterm_ase = mean((ensemble_shortterm-data_MITV_test$traffic_volume[1:10])^2)
+results_ase = results_ase %>% add_row(model_name = "Ensemble - Shortterm",forcastahead = 10, ase = ensemble_shortterm_ase)
+
+
+# Ensemble long term
+
+ensemble_longterm = (fore_arma_longterm$f + var_pred_longterm)/2
+plot(data_MITV_test$traffic_volume[1:1000],type='l',col="#040A99")
+lines(seq(1,1000,1),ensemble_longterm,type = 'l',col='#FF0000',lwd=2)
+
+ensemble_longterm_ase = mean((ensemble_longterm - data_MITV_test$traffic_volume[1:1000])^2)
+results_ase = results_ase %>% add_row(model_name = "Ensemble - Longterm",forcastahead = 1000, ase = ensemble_longterm_ase)
+
+```
+```{r}
+results_ase %>% arrange(forcastahead, ase)
+```
